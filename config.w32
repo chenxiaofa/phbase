@@ -1,0 +1,13 @@
+// $Id$
+// vim:ft=javascript
+
+// If your extension references something external, use ARG_WITH
+// ARG_WITH("php-hbase", "for php-hbase support", "no");
+
+// Otherwise, use ARG_ENABLE
+// ARG_ENABLE("php-hbase", "enable php-hbase support", "no");
+
+if (PHP_PHP-HBASE != "no") {
+	EXTENSION("php-hbase", "php-hbase.c");
+}
+
