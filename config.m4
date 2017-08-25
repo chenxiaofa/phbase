@@ -14,7 +14,7 @@ if test "$PHP_PHBASE" != "no"; then
     AC_MSG_ERROR("no thrift bin was found")
   fi
 
-  ./thirdparty/installed/bin/thrift --gen cpp --out . hbase.thrift
+  ./thirdparty/installed/bin/thrift --gen cpp --out . hbase.thrift1
 
 
 
@@ -24,6 +24,6 @@ if test "$PHP_PHBASE" != "no"; then
   PHP_ADD_INCLUDE(./thirdparty/installed/include/)
   CXXFLAGS="${CXXFLAGS} -std=c++11"
 
-  PHP_NEW_EXTENSION(phbase, hbase_constants.cpp hbase_types.cpp THBaseService.cpp phbase.cpp, $ext_shared)
+  PHP_NEW_EXTENSION(phbase, hbase_constants.cpp hbase_types.cpp Hbase.cpp phbase.cpp, $ext_shared)
 
 fi

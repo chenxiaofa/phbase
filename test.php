@@ -11,9 +11,10 @@
 
 
 $pidArray = [];
-$files = glob('x???');
+$files = glob('/data/ext/udid/x???');
 $s = microtime(1);
 $pid = 0;
+$f = '';
 while($files) {
     while (count($pidArray) >= 10) {
         foreach($pidArray as $pid) {
@@ -38,7 +39,7 @@ if ($pid > 0) {
 }
 
 
-$client = new PHBase('192.168.234.236', 9090);
+$client = new PHBase('192.168.234.236', 9091);
 $client->connect();
 
 $total = 0;

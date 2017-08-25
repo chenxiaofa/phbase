@@ -29,7 +29,7 @@
 #include "Zend/zend_exceptions.h"
 #include "ext/standard/php_string.h"
 
-#include "THBaseService.h"
+#include "Hbase.h"
 #include <vector>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -39,7 +39,7 @@ using namespace std;
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
-using namespace apache::hadoop::hbase::thrift2;
+using namespace apache::hadoop::hbase::thrift;
 
 
 
@@ -61,7 +61,7 @@ void object_array_init(){
 }
 
 typedef struct {
-    THBaseServiceClient *client = NULL;
+    HbaseClient *client = NULL;
 } phbase_object;
 
 
@@ -126,11 +126,11 @@ ZEND_METHOD(phbase, __construct) {
 
 
 
-    boost::shared_ptr<TSocket> socket(new TSocket("192.168.234.236", 9090));
+    boost::shared_ptr<TSocket> socket(new TSocket(host, port));
     boost::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
     boost::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
 
-    obj->client =  new THBaseServiceClient(protocol);
+    obj->client =  new HbaseClient(protocol);
 
     phbase_set_object(getThis(), obj);
 
@@ -172,63 +172,33 @@ ZEND_METHOD(phbase, get) {
     char *table_name = NULL, *row_key = NULL, *family = NULL, *qualifier = NULL;
     size_t table_name_len = 0, row_key_len = 0, family_len = 0, qualifier_len = 0;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ss|ss", &table_name, &table_name_len, &row_key, &row_key_len, &family, &family_len, &qualifier, &qualifier_len) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sss|s", &table_name, &table_name_len, &row_key, &row_key_len, &family, &family_len, &qualifier, &qualifier_len) == FAILURE) {
     	return;
     }
 
     phbase_object *obj = (phbase_object *)phbase_get_object(getThis());
 
-    TResult tresult;
-    TGet get;
-    const std::string table(table_name);
-    const std::string row(row_key);
-    get.__set_row(row);
+    std::vector<TCell> list;
+    Text table(table_name);
+    Text row(row_key);
+    Text column(family);
+    std::map<Text, Text> attributes;
 
-    if (family) {
-        std::vector<TColumn> vec;
-        TColumn c;
-        c.__set_family(family);
-        if (qualifier){
-            c.__set_qualifier(qualifier);
-        }
-        vec.push_back(c);
-        get.__set_columns(vec);
-    }
+
+
 
     try{
-        obj->client->get(tresult, table, get);
+        obj->client->get(list, table, row, family, attributes);
     }
     catch(apache::thrift::transport::TTransportException e){
         zend_throw_exception(phbase_exception_ce, e.what(), -1);
         RETVAL_NULL(); return;
     }
-    catch(apache::hadoop::hbase::thrift2::TIOError e){
-//        printf("\n\napache::hadoop::hbase::thrift2::TIOError::message=%s\n\n", e.message.c_str());
-        RETVAL_NULL(); return;
-    }
 
-    vector<TColumnValue> list=tresult.columnValues;
-    std::vector<TColumnValue>::const_iterator iter;
-    if (0 == list.size()){
-        RETVAL_NULL(); return;
-    }
-
+    std::vector<TCell>::const_iterator iter;
     array_init(return_value);
-    zval **f_hash = NULL;
-    HashTable *return_ht = Z_ARRVAL_P(return_value);
     for(iter=list.begin();iter!=list.end();iter++) {
-        const char *f = (*iter).family.c_str();
-        const char *q = (*iter).qualifier.c_str();
-        const char *v = (*iter).value.c_str();
-
-        if (zend_hash_find(return_ht, f, strlen(f)+1, (void **) &f_hash) != SUCCESS) {
-            zval *tmp = NULL;
-            MAKE_STD_ZVAL(tmp);
-            array_init(tmp);
-            add_assoc_zval(return_value, f, tmp);
-            f_hash = &tmp;
-        }
-        add_assoc_string(*f_hash, q, (char*)v, 1);
+        add_next_index_string(return_value, (*iter).value.c_str(), 0);
     }
 
 
@@ -239,48 +209,48 @@ ZEND_METHOD(phbase, get) {
 /* {{{ PHBase::exists()
  */
 ZEND_METHOD(phbase, exists) {
-
-    char *table_name = NULL, *row_key = NULL, *family = NULL, *qualifier = NULL;
-    size_t table_name_len = 0, row_key_len = 0, family_len = 0, qualifier_len = 0;
-
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ss|ss", &table_name, &table_name_len, &row_key, &row_key_len, &family, &family_len, &qualifier, &qualifier_len) == FAILURE) {
-    	return;
-    }
-
-    phbase_object *obj = (phbase_object *)phbase_get_object(getThis());
-
-    TResult tresult;
-    TGet get;
-    const std::string table(table_name);
-    const std::string row(row_key);
-    get.__set_row(row);
-
-    if (family) {
-        std::vector<TColumn> vec;
-        TColumn c;
-        c.__set_family(family);
-        if (qualifier){
-            c.__set_qualifier(qualifier);
-        }
-        vec.push_back(c);
-        get.__set_columns(vec);
-    }
-
-    try{
-        bool exists = obj->client->exists(table, get);
-        if (true == exists){
-            RETURN_TRUE
-        }
-        RETURN_FALSE
-    }
-    catch(apache::thrift::transport::TTransportException e){
-        zend_throw_exception(phbase_exception_ce, e.what(), -1);
-        RETVAL_NULL(); return;
-    }
-    catch(apache::hadoop::hbase::thrift2::TIOError e){
-        printf("\n\napache::hadoop::hbase::thrift2::TIOError::message=%s\n\n", e.message.c_str());
-        RETURN_FALSE
-    }
+//
+//    char *table_name = NULL, *row_key = NULL, *family = NULL, *qualifier = NULL;
+//    size_t table_name_len = 0, row_key_len = 0, family_len = 0, qualifier_len = 0;
+//
+//    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ss|ss", &table_name, &table_name_len, &row_key, &row_key_len, &family, &family_len, &qualifier, &qualifier_len) == FAILURE) {
+//    	return;
+//    }
+//
+//    phbase_object *obj = (phbase_object *)phbase_get_object(getThis());
+//
+//    TResult tresult;
+//    TGet get;
+//    const std::string table(table_name);
+//    const std::string row(row_key);
+//    get.__set_row(row);
+//
+//    if (family) {
+//        std::vector<TColumn> vec;
+//        TColumn c;
+//        c.__set_family(family);
+//        if (qualifier){
+//            c.__set_qualifier(qualifier);
+//        }
+//        vec.push_back(c);
+//        get.__set_columns(vec);
+//    }
+//
+//    try{
+//        bool exists = obj->client->exists(table, get);
+//        if (true == exists){
+//            RETURN_TRUE
+//        }
+//        RETURN_FALSE
+//    }
+//    catch(apache::thrift::transport::TTransportException e){
+//        zend_throw_exception(phbase_exception_ce, e.what(), -1);
+//        RETVAL_NULL(); return;
+//    }
+//    catch(apache::hadoop::hbase::thrift2::TIOError e){
+//        printf("\n\napache::hadoop::hbase::thrift2::TIOError::message=%s\n\n", e.message.c_str());
+//        RETURN_FALSE
+//    }
 
 
 }
@@ -290,7 +260,7 @@ ZEND_METHOD(phbase, exists) {
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phbase_get, 0, 0, 0)
 	ZEND_ARG_TYPE_INFO(0, table, 0, 0)
 	ZEND_ARG_TYPE_INFO(0, row_key, 0, 0)
-	ZEND_ARG_TYPE_INFO(0, family, 0, 1)
+	ZEND_ARG_TYPE_INFO(0, family, 0, 0)
 	ZEND_ARG_TYPE_INFO(0, qualifier, 0, 1)
 ZEND_END_ARG_INFO()
 
